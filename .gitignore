@@ -1,0 +1,4 @@
+data/*
+training/*
+.idea/
+__pycache__

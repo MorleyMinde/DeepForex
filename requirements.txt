@@ -1,0 +1,4 @@
+keras==2.1.3
+tensorflow-gpu=1.5.0
+git+https://github.com/Kismuz/btgym.git@8648166aa49079e8bb90b61c4a362bde470a3e18
+git+https://github.com/openai/gym.git@687a65f7123889e980b8b6593b7692095a812604
