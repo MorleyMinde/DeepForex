@@ -1,19 +1,22 @@
-from keras.layers import Dense,Dropout, Activation, Flatten, Convolution2D,Permute,LSTM
+from keras.layers import Dense,Dropout, Activation, Flatten, Convolution1D,Permute,LSTM,MaxPooling1D,Reshape
+from keras.optimizers import RMSprop
 from keras.models import Sequential
 from keras.optimizers import Adam
 import numpy as np
 import random
 import os
 from collections import deque
+import json
 
 class Agent():
     def __init__(self, state_size, action_size,dir):
         self.weight_backup = "{}/weights.h5".format(dir)
+        self.config = json.load(open('{}/config.json'.format(dir)))
         self.state_size = state_size
         self.action_size = action_size
         self.memory = deque(maxlen=20000)
         self.learning_rate = 0.01
-        self.gamma = 0.99
+        self.gamma = 0.6
         self.exploration_rate = 1.0
         self.exploration_min    = 0.01
         self.exploration_decay  = 0.995
@@ -29,18 +32,36 @@ class Agent():
         # model.add(Dense(self.action_size, activation='linear'))
         # model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
         #
-        model.add(LSTM(32,  return_sequences=True,input_shape=(4,8)))
-        model.add(LSTM(32,  return_sequences=True))
-        model.add(LSTM(32))
-        model.add(Dropout(0.5))
-        model.add(Dense(32, activation='relu'))
-        model.add(Dropout(0.5))
-        model.add(Dense(20, activation='relu'))
-        model.add(Dropout(0.5))
-        model.add(Dense(10, activation='relu'))
-        model.add(Dense(self.action_size, activation='linear'))
+        if self.config['network'] == "CNNRNN":
+            model.add(Convolution1D(32, 5, border_mode='same', input_shape=(30,8)))
+            model.add(MaxPooling1D(pool_size=(30)))
+            model.add(Activation('relu'))
+            #model.add(Permute((0, 5, 2, 1)))
+            model.add(Reshape(target_shape=(30,8)))
+            model.add(LSTM(256))
+            model.add(Dropout(0.5))
+            model.add(LSTM(32,  return_sequences=True))
+            model.add(Dropout(0.5))
+            model.add(Dense(32, activation='relu'))
+            model.add(Dropout(0.5))
+            model.add(Dense(self.action_size))
+            model.add(Activation('softmax'))
+            model.compile(loss='categorical_crossentropy', optimizer=RMSprop(lr=self.learning_rate))
+        else:
+            model.add(LSTM(32,  return_sequences=True,input_shape=(30,8)))
+            model.add(Dropout(0.5))
+            model.add(LSTM(32,  return_sequences=True))
+            model.add(Dropout(0.5))
+            model.add(LSTM(32))
+            model.add(Dropout(0.5))
+            model.add(Dense(32, activation='relu'))
+            model.add(Dropout(0.5))
+            model.add(Dense(20, activation='relu'))
+            model.add(Dropout(0.5))
+            model.add(Dense(10, activation='relu'))
+            model.add(Dense(self.action_size, activation='linear'))
+            model.compile(loss=self.config['loss'], optimizer=Adam(lr=self.learning_rate))
         # Create the model based on the information above
-        model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
         #model.compile(loss='mean_squared_error', optimizer='adam')
         if os.path.isfile(self.weight_backup):
                     model.load_weights(self.weight_backup)

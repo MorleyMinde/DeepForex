@@ -1,6 +1,7 @@
 from btgym import BTgymEnv, BTgymBaseStrategy, BTgymDataset
 import numpy as np
 import backtrader.indicators as btind
+import backtrader.talib as talib
 import datetime
 
 class MyStrategy(BTgymBaseStrategy):
@@ -16,18 +17,23 @@ class MyStrategy(BTgymBaseStrategy):
         period = self.dim_time
         self.indicators.append(btind.ExponentialMovingAverage(
             self.datas[0],
-            period=period
+            period=15
         ))
-        self.indicators.append(btind.MACD(
+        self.indicators.append(btind.MACDHisto(
             self.datas[0]
         ))
-        self.indicators.append(btind.WilliamsAD(
-            self.datas[0]
-        ))
-        self.indicators.append(btind.BollingerBands(
+        self.indicators.append(btind.RSI(
             self.datas[0],
-            period=period
+            period=15
         ))
+        self.indicators.append(btind.BollingerBandsPct(
+            self.datas[0]
+        ))
+        # self.indicators.append(talib.ADOSC(
+        #     self.datas[0].high,self.datas[0].low,self.datas[0].close,self.datas[0].volume
+        # ))
+        #
+        # print("Set Lines:")
     def _get_raw_state(self):
         """
         Default state observation composer.
@@ -62,7 +68,16 @@ class MyStrategy(BTgymBaseStrategy):
                 else:
                     self.state['indicator_states'] = np.concatenate((self.state['indicator_states'],np.row_stack((np.frombuffer(indicator.get(size=self.dim_time)),)).T),axis=1)
         self.state['indicator_states'][np.isnan(self.state['indicator_states'])] = 1
-        self.state['indicator_states'][:,3] = self.state['indicator_states'][:,3] /100
+        newarr = []
+        for a in np.nditer(self.state['indicator_states'][:,2]):
+            if(a <= 30):
+                newarr.append(-1)
+            elif a >= 70:
+                newarr.append(1)
+            else:
+                newarr.append(0)
+        self.state['indicator_states'][:,2] = newarr
+        #self.state['indicator_states'][:,3] = self.state['indicator_states'][:,3] /100
         return self.state
 
 
