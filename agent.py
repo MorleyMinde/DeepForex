@@ -1,6 +1,6 @@
-from keras.layers import Dense,Dropout, Activation, Flatten, Convolution1D,Permute,LSTM,MaxPooling1D,Reshape
+from keras.layers import Dense,Dropout, Activation,TimeDistributed, Flatten, Convolution1D,Convolution2D,Permute,LSTM,MaxPooling1D,Reshape,BatchNormalization,Input
 from keras.optimizers import RMSprop
-from keras.models import Sequential
+from keras.models import Sequential,load_model
 from keras.optimizers import Adam
 import numpy as np
 import random
@@ -15,8 +15,8 @@ class Agent():
         self.state_size = state_size
         self.action_size = action_size
         self.memory = deque(maxlen=20000)
-        self.learning_rate = 0.01
-        self.gamma = 0.6
+        self.learning_rate = 0.001
+        self.gamma = 0.9
         self.exploration_rate = 1.0
         self.exploration_min    = 0.01
         self.exploration_decay  = 0.995
@@ -33,47 +33,63 @@ class Agent():
         # model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
         #
         if self.config['network'] == "CNNRNN":
-            model.add(Convolution1D(32, 5, border_mode='same', input_shape=(30,8)))
-            model.add(MaxPooling1D(pool_size=(30)))
+            model.add(LSTM(10,  return_sequences=True,input_shape=(30,8)))
+            model.add(Dropout(0.5))
+            model.add(LSTM(50,  return_sequences=True))
+            model.add(BatchNormalization())
             model.add(Activation('relu'))
-            #model.add(Permute((0, 5, 2, 1)))
-            model.add(Reshape(target_shape=(30,8)))
-            model.add(LSTM(256))
             model.add(Dropout(0.5))
-            model.add(LSTM(32,  return_sequences=True))
-            model.add(Dropout(0.5))
-            model.add(Dense(32, activation='relu'))
-            model.add(Dropout(0.5))
-            model.add(Dense(self.action_size))
-            model.add(Activation('softmax'))
-            model.compile(loss='categorical_crossentropy', optimizer=RMSprop(lr=self.learning_rate))
-        else:
-            model.add(LSTM(32,  return_sequences=True,input_shape=(30,8)))
-            model.add(Dropout(0.5))
-            model.add(LSTM(32,  return_sequences=True))
-            model.add(Dropout(0.5))
-            model.add(LSTM(32))
-            model.add(Dropout(0.5))
-            model.add(Dense(32, activation='relu'))
-            model.add(Dropout(0.5))
-            model.add(Dense(20, activation='relu'))
+            model.add(Dense(50))
+            model.add(BatchNormalization())
+            model.add(Activation('relu'))
             model.add(Dropout(0.5))
             model.add(Dense(10, activation='relu'))
             model.add(Dense(self.action_size, activation='linear'))
             model.compile(loss=self.config['loss'], optimizer=Adam(lr=self.learning_rate))
+        else:
+            PERIODS_PER_X = 30
+            # model.add(LSTM(32,  return_sequences=True,input_shape=(30,8)))
+            # model.add(Dropout(0.5))
+            # model.add(LSTM(32))
+            # model.add(Dropout(0.5))
+            # model.add(Dense(32, activation='relu'))
+            # model.add(Dropout(0.5))
+            # model.add(Dense(10, activation='relu'))
+            # model.add(Dense(self.action_size, activation='linear'))
+            # model.compile(loss=self.config['loss'], optimizer=Adam(lr=self.learning_rate))
+            # model.add(Reshape((1, PERIODS_PER_X, self.state_size), input_shape=(PERIODS_PER_X, self.state_size)))
+            # model.add(Input((PERIODS_PER_X, self.state_size)))
+            model.add(Convolution1D(128, 3, padding='same',activation='relu',input_shape=(PERIODS_PER_X,8)))
+            model.add(MaxPooling1D(pool_size=2))
+            model.add(Convolution1D(64, 3, activation='relu', padding="same"))
+            model.add(MaxPooling1D(pool_size=2))
+            # model.add(Reshape((PERIODS_PER_X, self.state_size)))
+            model.add(LSTM(64, return_sequences=True))
+            model.add(Dropout(0.25))
+            model.add(LSTM(32, return_sequences=True))
+            model.add(Dropout(0.5))
+            model.add(Dense(16, activation='relu'))
+            model.add(Dense(self.action_size, activation='softmax'))
+            # if doesn't fit as well as other one, try adding more layers, or try using the old model with only price information (KISS)
+
+            model.compile(loss=self.config['loss'], optimizer=Adam(lr=self.learning_rate))
         # Create the model based on the information above
         #model.compile(loss='mean_squared_error', optimizer='adam')
         if os.path.isfile(self.weight_backup):
-                    model.load_weights(self.weight_backup)
-                    self.exploration_rate = self.exploration_min
+            #load_model(self.weight_backup)
+            model.load_weights(self.weight_backup,True)
+            self.exploration_rate = self.exploration_min
         return model
     def save_model(self):
-            self.brain.save(self.weight_backup)
+        self.brain.save(self.weight_backup)
     def act(self, state):
         if np.random.rand() <= self.exploration_rate:
             return random.randrange(self.action_size)
         act_values = self.brain.predict(state)
-        return np.argmax(act_values[0])
+        action = np.argmax(act_values[0])
+        if action > 3:
+           print(action,act_values,act_values[0])
+        return action
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
     def replay(self, sample_batch_size):

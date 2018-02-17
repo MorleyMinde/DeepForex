@@ -6,6 +6,7 @@ import datetime
 
 class MyStrategy(BTgymBaseStrategy):
     def __init__(self, **kwargs):
+        self.previous_cash = None
         self.dim_time = self.p.state_shape[list(self.p.state_shape.keys())[0]].shape[0]
         BTgymBaseStrategy.__init__(self,**kwargs)
     """
@@ -29,6 +30,16 @@ class MyStrategy(BTgymBaseStrategy):
         self.indicators.append(btind.BollingerBandsPct(
             self.datas[0]
         ))
+        # self.indicators.append(btind.MACDHisto(
+        #     self.datas[0]
+        # ))
+        # self.indicators.append(btind.RSI(
+        #     self.datas[0],
+        #     period=15
+        # ))
+        # self.indicators.append(btind.BollingerBandsPct(
+        #     self.datas[0]
+        # ))
         # self.indicators.append(talib.ADOSC(
         #     self.datas[0].high,self.datas[0].low,self.datas[0].close,self.datas[0].volume
         # ))
@@ -79,6 +90,23 @@ class MyStrategy(BTgymBaseStrategy):
         self.state['indicator_states'][:,2] = newarr
         #self.state['indicator_states'][:,3] = self.state['indicator_states'][:,3] /100
         return self.state
+    def get_reward(self):
+        """
+        Default reward estimator.
+
+        Computes `dummy` reward as log utility of current to initial portfolio value ratio.
+        Same principles as for state composer apply.
+
+        Returns:
+             reward scalar, float
+        """
+        if self.previous_cash == None:
+            self.previous_cash = self.env.broker.startingcash
+        reward = float(np.log(self.stats.broker.value[0] / self.previous_cash))
+
+        self.previous_cash = self.stats.broker.value[0]
+        return reward
+        # return float(np.log(self.stats.broker.value[0] / (self.env.broker.startingcash + (0.3 * self.env.broker.startingcash))))
 
 
 import numpy as np

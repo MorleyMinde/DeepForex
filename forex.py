@@ -25,6 +25,7 @@ class Forex:
                   start_cash=self.config['capital'],
                   broker_commission=self.config['commission'],
                   fixed_stake=self.config['stake'],
+            #drawdown_call=50,
                   state_shape={'raw_state': spaces.Box(low=1, high=2, shape=self.input_shape),'indicator_states': spaces.Box(low=-1, high=10, shape=self.input_shape)},
                   port=5006,
                   data_port=4804,
@@ -51,14 +52,23 @@ class Forex:
                 message = ""
 
                 count = 0
+                negativeReward = 0
+                positiveReward = 0
+                mapper = {
+                    0:0,
+                    1:0,
+                    2:0,
+                    3:0,
+                }
                 while not done:
                     # self.env.render()
                     action = self.agent.act(state)
-                    # if count/5 in path:
-                    #     action = path[count/5]
-                    # else:
-                    #     action = 0
                     next_state, reward, done, info = self.env.step(action)
+                    mapper[action] += 1
+                    if reward > 0:
+                        positiveReward += reward
+                    else:
+                       negativeReward += reward
                     # next_state = np.reshape(next_state, [1, self.state_size])
                     # next_state = np.array(next_state['raw_state'])
                     # print("Shape1 :{} Shape2 :{}".format(next_state['raw_state'].shape,next_state['indicator_states'].shape))
@@ -80,10 +90,11 @@ class Forex:
                 episode_stat = self.env.get_stat()
                 self.monitor.logepisode({"reward":reward,"cpu_time_sec":episode_stat['runtime'].total_seconds(),"global_step":self.config['trained_episodes'] + episodes,'broker_value':info[0]['broker_value'],"episode":self.env.render('episode')[None,:]})
                 if "CLOSE, END OF DATA" == message:
-                    print("\x1b[6;30;42m{}\t{} \t{} \t\t{}\x1b[0m".format(time.strftime("%H:%M:%S"),index + 1,final_cash,message))
+                    print("\x1b[6;30;42m{}\t{} {} \t{} {}\t\t{}\x1b[0m".format(time.strftime("%H:%M:%S"),index + 1,positiveReward,int(final_cash),mapper,message))
                 else:
-                    pass
-                    # print("{} \t{} \t\t{}".format(index + 1,final_cash,message))
+                    if positiveReward > 0:
+                        print("{}\t{} {} \t{} {}\t\t{}".format(time.strftime("%H:%M:%S"),index + 1,positiveReward,int(final_cash),mapper,message))
+                    #print("{} {} \t{} {}\t\t{}".format(index + 1,positiveReward,int(final_cash),mapper,message))
                 self.agent.replay(self.sample_batch_size)
         finally:
             self.config['trained_episodes'] += episodes
