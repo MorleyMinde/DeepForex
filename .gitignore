@@ -2,3 +2,4 @@ data/*
 training/*
 .idea/
 __pycache__
+*.pyc

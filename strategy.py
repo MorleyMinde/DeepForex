@@ -4,6 +4,20 @@ import backtrader.indicators as btind
 import backtrader.talib as talib
 import datetime
 
+class RelativeVolume(btind.Indicator):
+    lines = ('rvi',)
+
+    params = (
+        ('period', 390),
+    )
+
+    def __init__(self):
+        #not sure if this is the right way to slice data within your framework
+        self.lines.rvi = self.data.volume / btind.Average(self.data.volume, period=self.p.period)
+
+        # Done after calc to ensure coop inheritance and composition work
+        super(RelativeVolume, self).__init__()
+
 class MyStrategy(BTgymBaseStrategy):
     def __init__(self, **kwargs):
         self.previous_cash = None
@@ -25,11 +39,17 @@ class MyStrategy(BTgymBaseStrategy):
         ))
         self.indicators.append(btind.RSI(
             self.datas[0],
-            period=15
+            period=15,safediv=True
         ))
-        self.indicators.append(btind.BollingerBandsPct(
-            self.datas[0]
+        self.indicators.append(btind.StochasticFast(
+            self.datas[0],safediv=True
         ))
+        self.indicators.append(RelativeVolume(
+            self.datas[0],period=30
+        ))
+        # self.indicators.append(talib.MFI(
+        #     self.datas[0].high, self.datas[0].low, self.datas[0].close, self.datas[0].volume, timeperiod=14
+        # ))
         # self.indicators.append(btind.MACDHisto(
         #     self.datas[0]
         # ))
@@ -58,6 +78,7 @@ class MyStrategy(BTgymBaseStrategy):
             `self.raw_state` is used to render environment `human` mode and should not be modified.
 
         """
+
         self.raw_state = np.row_stack(
             (
                 np.frombuffer(self.data.open.get(size=self.dim_time)),
@@ -69,8 +90,7 @@ class MyStrategy(BTgymBaseStrategy):
 
         return self.raw_state
     def get_state(self):
-        X = self.raw_state
-        self.state['raw_state'] = X
+        self.state['raw_state'] = self.raw_state
         self.state.pop('indicator_states', None)
         if True:
             for indicator in self.indicators:
@@ -88,6 +108,16 @@ class MyStrategy(BTgymBaseStrategy):
             else:
                 newarr.append(0)
         self.state['indicator_states'][:,2] = newarr
+        volume = np.row_stack(
+            (
+                np.frombuffer(self.data.volume.get(size=self.dim_time))
+            )
+        ).T
+        volume = (volume - min(volume))/(max(volume) - min(volume))
+        volume[np.isnan(volume)] = 0
+        v = np.reshape(volume,(30,1))
+        self.state['indicator_states'] = np.concatenate((self.state['indicator_states'],volume.T),axis=1)
+        # np.concatenate((self.state['indicator_states'],volume[0]),axis=1)
         #self.state['indicator_states'][:,3] = self.state['indicator_states'][:,3] /100
         return self.state
     def get_reward(self):
